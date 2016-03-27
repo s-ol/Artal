@@ -1,6 +1,8 @@
 # **Artal**
 ### A .PSD parsing library for LÖVE
 
+https://love2d.org/
+
 Purpose is to expose the structure of .PSD files into LÖVE.
 - ImageData for the layers.
 - Names.
