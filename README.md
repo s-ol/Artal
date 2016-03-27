@@ -8,6 +8,9 @@ Purpose is to expose the structure of .PSD files into LÖVE.
 - Clipping mode.
 - Structure, folder / image.
 
+
+Adobe documentation on the PSD file format: http://www.adobe.com/devnet-apps/photoshop/fileformatashtml/
+
 ![](https://u.pomf.is/sbzsva.gif)
 
 ## artal.lua
@@ -75,10 +78,6 @@ There's sample code for these first 5 blendmodes.
 "sat"  = saturation
 "colr" = color
 "lum"  = luminosity
-```
-```
-Adobe documentation on the PSD file format.
-http://www.adobe.com/devnet-apps/photoshop/fileformatashtml/
 ```
 
 ### Sample code:
@@ -154,105 +153,6 @@ function love.draw()
 	
 end
 ```
-### Clipping sample
-![](https://u.pomf.is/ubvsna.png)
-```lua
-local artal = require("artal")
-local psdShader = require("psdShader")
-love.graphics.setBackgroundColor(255,255,255)
-
-img = artal.newPSD("sample.psd")
-
-local blendShader = {}
-blendShader.clip = love.graphics.newShader(psdShader.createShaderString("norm", "norm", "over"))
-
-function love.draw()
-	love.graphics.draw(img[1].image,nil,nil,nil,nil,nil,img[1].ox,img[1].oy)
-	psdShader.setShader(blendShader.clip)
-	psdShader.drawClip(1,img[3].image,nil,nil,nil,nil,nil,img[3].ox,img[3].oy)
-	psdShader.drawClip(2,img[4].image,nil,nil,nil,nil,nil,img[4].ox,img[4].oy)
-	love.graphics.draw(img[2].image,nil,nil,nil,nil,nil,img[2].ox,img[2].oy)
-	love.graphics.setShader()
-end
-```
-
-### Blendmode sample
-![](https://u.pomf.is/ntxeen.png)
-```lua
-local artal = require("artal")
-local psdShader = require("psdShader")
-love.graphics.setBackgroundColor(255,255,255)
-
-img = artal.newPSD("sample.psd")
-
-local blendShader = {}
-blendShader.mul = love.graphics.newShader(psdShader.createShaderString("mul"))
-blendShader.scrn = love.graphics.newShader(psdShader.createShaderString("scrn"))
-blendShader.over = love.graphics.newShader(psdShader.createShaderString("over"))
-
-local canvas = {}
-canvas[1] = love.graphics.newCanvas(love.graphics.getDimensions())
-canvas[2] = love.graphics.newCanvas(love.graphics.getDimensions())
-
-function love.draw()
-
-	love.graphics.setCanvas(canvas[1])
-	love.graphics.clear(255,255,255)
-
-	for i = 1, #img do
-		if img[i].blend == "mul" or
-			img[i].blend == "over" or
-			img[i].blend == "scrn" then
-			
-			psdShader.setShader(blendShader[img[i].blend],canvas[1],canvas[2])
-		end
-		love.graphics.draw(img[i].image,nil,nil,nil,nil,nil,img[i].ox,img[i].oy)
-		love.graphics.setShader()
-	end
-	
-	-- Draw result to screen
-	local preCanvas = love.graphics.getCanvas()
-	love.graphics.setCanvas(nil)
-	love.graphics.setBlendMode("alpha","premultiplied")
-	love.graphics.draw(preCanvas)
-	love.graphics.setBlendMode("alpha")
-end
-```
-### Blend and Clipping
-![](https://u.pomf.is/zjpidx.png)
-```lua
-local artal = require("artal")
-local psdShader = require("psdShader")
-love.graphics.setBackgroundColor(255,255,255)
-
-img = artal.newPSD("sample.psd")
-
-local blendShader = {}
-blendShader.clipAndBlend = love.graphics.newShader(psdShader.createShaderString("mul", "over", "scrn"))
-
-local canvas = {}
-canvas[1] = love.graphics.newCanvas(love.graphics.getDimensions())
-canvas[2] = love.graphics.newCanvas(love.graphics.getDimensions())
-
-function love.draw()
-	love.graphics.setCanvas(canvas[1])
-	love.graphics.clear(255,255,255)
-
-	love.graphics.draw(img[1].image,nil,nil,nil,nil,nil,img[1].ox,img[1].oy)
-    psdShader.setShader(blendShader.clipAndBlend, canvas[1], canvas[2])
-    psdShader.drawClip(1,img[3].image,nil,nil,nil,nil,nil,img[3].ox,img[3].oy)
-    psdShader.drawClip(2,img[4].image,nil,nil,nil,nil,nil,img[4].ox,img[4].oy)
-    love.graphics.draw(img[2].image,nil,nil,nil,nil,nil,img[2].ox,img[2].oy)
-    love.graphics.setShader()
-	
-	-- Draw result to screen
-	local preCanvas = love.graphics.getCanvas()
-	love.graphics.setCanvas(nil)
-	love.graphics.setBlendMode("alpha","premultiplied")
-	love.graphics.draw(preCanvas)
-	love.graphics.setBlendMode("alpha")
-end
-```
 
 ### Loading specific layers.
 ![](https://u.pomf.is/exmlfg.png)
@@ -260,11 +160,12 @@ end
 local artal = require("artal")
 love.graphics.setBackgroundColor(255,255,255)
 
-img = artal.newPSD("sample.psd","info")
+local fileData = love.filesystem.newFileData("sample.psd")
+img = artal.newPSD(fileData,"info")
 
 for i = 1, #img do
 	if img[i].type == "image" and string.find(img[i].name, "Blob") then -- Only load layers with Blob in the name
-		img[i].image = love.graphics.newImage(artal.newPSD("sample.psd", i))
+		img[i].image = love.graphics.newImage(artal.newPSD(fileData, i))
 	end
 end
 
@@ -285,8 +186,12 @@ function love.draw()
 end
 ```
 
-### Structure of the table returned from artal.newPSD()
-This structure is generated from writetable.lua. And you can use that to visualize your own tables.
+### writetable.lua
+Create a string from tables. So you can inspect tables created by artal.newPSD(). The structure below is generated from writetable.lua. And you can use that to visualize your own tables as well.
+```lua
+local writetable = require("writetable")
+tableAsString = writetable.createStringFromTable(table)
+```
 
 ```lua
 {
@@ -342,19 +247,123 @@ This structure is generated from writetable.lua. And you can use that to visuali
 ```
 
 ### psdShader.lua:
-Small library to generate shaders for blending and clipping layers.
+NOTE: This library is very much incomplete. But it's at least a starting point for you to understand how you can create shaders that mimics photoshop effects.
+
+It generates shaders for blending and clipping layers.
 Blendmodes implemented: Alpha, Multiply, Screen and Overlay.
+
+It may require a "Swap canvas" system If you need a global blend mode. See below for samples.
 ```lua
 local psdShader = require("psdShader")
+
+-- If you pass in "mul", "scrn" or "over" to globalBlendmode the shader generated will require a swapcanvas.
 shaderString = psdShader.createShaderString(globalBlendmode, blendmodeBeingClipped, ...)
-psdShader.setShader(shader)
-psdShader.drawClip(drawOrderIndex,image,x,y,r,sx,sy,ox,oy,kx,ky) -- (Rotation and shearing not implemented.)
+
+-- Passing in canvas is only required if you use a shader with globalBlendmode: mul, scrn, over.
+psdShader.setShader(shader, canvas1, canvas2) 
+
+-- Rotation and shearing not implemented. love.graphics.push() and friends does not work either.
+-- The image that is passed in is also retained. Unlike love.graphics.draw().
+psdShader.drawClip(drawOrderIndex,image,x,y,r,sx,sy,ox,oy,kx,ky) 
 resultCanvas = psdShader.flatten(psdTableClipTo, psdTableBeingClipped, ...)
 ```
-
-### writetable.lua
-Create a string from tables. So you can inspect tables created by artal.newPSD(). Or anything else for that matter.
+### Clipping sample
+![](https://u.pomf.is/ubvsna.png)
 ```lua
-local writetable = require("writetable")
-tableAsString = writetable.createStringFromTable(table)
+local artal = require("artal")
+local psdShader = require("psdShader")
+love.graphics.setBackgroundColor(255,255,255)
+
+img = artal.newPSD("sample.psd")
+
+local blendShader = {}
+blendShader.clip = love.graphics.newShader(psdShader.createShaderString("norm", "norm", "over"))
+
+function love.draw()
+	love.graphics.draw(img[1].image,nil,nil,nil,nil,nil,img[1].ox,img[1].oy)
+	psdShader.setShader(blendShader.clip)
+	psdShader.drawClip(1,img[3].image,nil,nil,nil,nil,nil,img[3].ox,img[3].oy)
+	psdShader.drawClip(2,img[4].image,nil,nil,nil,nil,nil,img[4].ox,img[4].oy)
+	love.graphics.draw(img[2].image,nil,nil,nil,nil,nil,img[2].ox,img[2].oy)
+	love.graphics.setShader()
+end
 ```
+
+### Blendmode sample
+![](https://u.pomf.is/ntxeen.png)
+```lua
+local artal = require("artal")
+local psdShader = require("psdShader")
+love.graphics.setBackgroundColor(255,255,255)
+
+img = artal.newPSD("sample.psd")
+
+local blendShader = {}
+blendShader.mul = love.graphics.newShader(psdShader.createShaderString("mul"))
+blendShader.scrn = love.graphics.newShader(psdShader.createShaderString("scrn"))
+blendShader.over = love.graphics.newShader(psdShader.createShaderString("over"))
+
+local canvas = {} -- These blendmode all requires a swap canvas
+canvas[1] = love.graphics.newCanvas(love.graphics.getDimensions())
+canvas[2] = love.graphics.newCanvas(love.graphics.getDimensions())
+
+function love.draw()
+
+	love.graphics.setCanvas(canvas[1])
+	love.graphics.clear(255,255,255)
+
+	for i = 1, #img do
+		if img[i].blend == "mul" or
+			img[i].blend == "over" or
+			img[i].blend == "scrn" then
+			
+			psdShader.setShader(blendShader[img[i].blend],canvas[1],canvas[2])
+		end
+		love.graphics.draw(img[i].image,nil,nil,nil,nil,nil,img[i].ox,img[i].oy)
+		love.graphics.setShader()
+	end
+	
+	-- Draw result to screen
+	local preCanvas = love.graphics.getCanvas()
+	love.graphics.setCanvas(nil)
+	love.graphics.setBlendMode("alpha","premultiplied")
+	love.graphics.draw(preCanvas)
+	love.graphics.setBlendMode("alpha")
+end
+```
+### Blend and Clipping
+![](https://u.pomf.is/zjpidx.png)
+```lua
+local artal = require("artal")
+local psdShader = require("psdShader")
+love.graphics.setBackgroundColor(255,255,255)
+
+img = artal.newPSD("sample.psd")
+
+local blendShader = {}
+blendShader.clipAndBlend = love.graphics.newShader(psdShader.createShaderString("mul", "over", "scrn"))
+
+local canvas = {} -- These blendmode all requires a swap canvas
+canvas[1] = love.graphics.newCanvas(love.graphics.getDimensions())
+canvas[2] = love.graphics.newCanvas(love.graphics.getDimensions())
+
+function love.draw()
+	love.graphics.setCanvas(canvas[1])
+	love.graphics.clear(255,255,255)
+
+	love.graphics.draw(img[1].image,nil,nil,nil,nil,nil,img[1].ox,img[1].oy)
+    psdShader.setShader(blendShader.clipAndBlend, canvas[1], canvas[2])
+    psdShader.drawClip(1,img[3].image,nil,nil,nil,nil,nil,img[3].ox,img[3].oy)
+    psdShader.drawClip(2,img[4].image,nil,nil,nil,nil,nil,img[4].ox,img[4].oy)
+    love.graphics.draw(img[2].image,nil,nil,nil,nil,nil,img[2].ox,img[2].oy)
+    love.graphics.setShader()
+	
+	-- Draw result to screen
+	local preCanvas = love.graphics.getCanvas()
+	love.graphics.setCanvas(nil)
+	love.graphics.setBlendMode("alpha","premultiplied")
+	love.graphics.draw(preCanvas)
+	love.graphics.setBlendMode("alpha")
+end
+```
+
