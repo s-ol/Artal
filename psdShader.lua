@@ -159,7 +159,6 @@ function psdShader.createShaderString(mainBlendMode,...)
 	return result 
 end
 
--- fix canvas swapping
 function psdShader.setShader(shader,swapCanvas1,swapCanvas2)
 	local errorMessage = "psdShader.setShader: You must pass in a shader created with love.graphics.newShader(psdShader.createShaderString())"
 	assert(type(shader) == "userdata", errorMessage)
