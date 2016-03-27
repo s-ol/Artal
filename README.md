@@ -16,68 +16,13 @@ Adobe documentation on the PSD file format: http://www.adobe.com/devnet-apps/pho
 ## artal.lua
 ```lua
 artal = require("artal")
-psdTable = artal.newPSD(FileNameOrFileData) --full structure with the layers loaded in as images.
-psdTable = artal.newPSD(FileNameOrFileData, "info") --full structure.
-ImageDataOrNil = artal.newPSD(FileNameOrFileData, layerNumber) --ImageData for the specified layer number.
+psdTable = artal.newPSD(FileNameOrFileData) -- full structure with the layers loaded in as images.
+psdTable = artal.newPSD(FileNameOrFileData, "info") -- full structure.
+ImageDataOrNil = artal.newPSD(FileNameOrFileData, layerNumber) -- ImageData for the specified layer number.
 ImageData = artal.newPSD(FileNameOrFileData, "composed")
 -- ImageData of the composed image as it's stored in the psd file itself.
 -- Note that Photoshop has an slightly erroneous implementation composing the alpha into the composed image.
 -- So images without a fully opaque background will be slightly blended with white.
-```
-
-### Full structure
-```
-width: width of the composed image.
-height: height of the composed image.
-Numbered Indexes: All the layers as tables.
-	name: name of layer / folder
-	type: type of the layer
-	blend: blendmode of layer / folder. See below for available modes
-	clip: Boolean if the layer is a clipping layer.
-	if type "image" then -- image layer with an image
-		image: image for the layer.
-		ox: offset for the layer. Pass in these to the ox and oy parameters of love.graphics.draw().
-		oy: 
-	if type "empty" then -- image layer without an image
-		nothing extra.
-	if type "open" then -- folder open layer
-		nothing extra.
-	if type "close" then -- folder close layer
-		nothing extra.
-```
-### BlendModes
-These are all blendmodes available.
-```
-There's sample code for these first 5 blendmodes.
-"norm" = normal
-"pass" = pass through
-"mul"  = multiply
-"scrn" = screen
-"over" = overlay
-
-"diss" = dissolve
-"dark" = darken
-"idiv" = color burn
-"lbrn" = linear burn
-"dkCl" = darker color
-"lite" = lighten
-"div"  = color dodge
-"lddg" = linear dodge
-"lgCl" = lighter color
-"sLit" = soft light
-"hLit" = hard light
-"vLit" = vivid light
-"lLit" = linear light
-"pLit" = pin light
-"hMix" = hard mix
-"diff" = difference
-"smud" = exclusion
-"fsub" = subtract
-"fdiv" = divide
-"hue"  = hue
-"sat"  = saturation
-"colr" = color
-"lum"  = luminosity
 ```
 
 ### Sample code:
@@ -103,7 +48,7 @@ function love.draw()
 end
 ```
 
-### Show information artal extracts from the psd file
+### Full structure artal extracts from the psd.
 ![](https://u.pomf.is/vrwgck.png)
 ```lua
 local artal = require("artal")
@@ -152,6 +97,49 @@ function love.draw()
 	end
 	
 end
+```
+### Layer Types
+These are the type of layers
+```
+"image" = image layer with imagedata.
+"empty" = image layer without imagedata.
+"open" = folder layer.
+"close" = folder layer.
+```
+
+### Blend Modes
+These are all blendmodes available.
+```
+There's sample code for these first 5 blendmodes.
+"norm" = normal
+"pass" = pass through
+"mul"  = multiply
+"scrn" = screen
+"over" = overlay
+
+"diss" = dissolve
+"dark" = darken
+"idiv" = color burn
+"lbrn" = linear burn
+"dkCl" = darker color
+"lite" = lighten
+"div"  = color dodge
+"lddg" = linear dodge
+"lgCl" = lighter color
+"sLit" = soft light
+"hLit" = hard light
+"vLit" = vivid light
+"lLit" = linear light
+"pLit" = pin light
+"hMix" = hard mix
+"diff" = difference
+"smud" = exclusion
+"fsub" = subtract
+"fdiv" = divide
+"hue"  = hue
+"sat"  = saturation
+"colr" = color
+"lum"  = luminosity
 ```
 
 ### Loading specific layers.
