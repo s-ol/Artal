@@ -10,7 +10,6 @@ Purpose is to expose the structure of .PSD files into LÖVE.
 - Clipping mode.
 - Structure, folder / image.
 
-
 Adobe documentation on the PSD file format: http://www.adobe.com/devnet-apps/photoshop/fileformatashtml/
 
 ![](https://u.pomf.is/sbzsva.gif)
@@ -105,9 +104,10 @@ These are the type of layers
 ```
 "image" = image layer with imagedata.
 "empty" = image layer without imagedata.
-"open" = folder layer.
-"close" = folder layer.
+"open" = beginning of group layer.
+"close" = end of group layer.
 ```
+Layers between an `"open"` and a `"close"` are nested inside that group.
 
 ### Blend Modes
 These are all blendmodes available.
