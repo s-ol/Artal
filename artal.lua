@@ -24,7 +24,12 @@ SOFTWARE.
 
 local ffi = require("ffi")
 local artalFunction = {}
-artalFunction.version = "1.0"
+artalFunction.version = "1.1"
+
+--[[~~~~~~~~~~~~~~~~~~ Version 1.1 change log ~~~~~~~~~~~~~~~~~~
+-- Fixed error in the image loading routine that caused it to incorrectly 
+   determine the size of image. Thus loading garbage data.
+--]]
 
 local function hexToNumber(first,second,third,forth) -- first is the direct hex -- Lack 8 length support
 	local result = first
@@ -181,152 +186,161 @@ local function artalNewLayerImageData(layerLoadData,askIsImageLayer)
 	artal.count = artal.count - 4
 
 	local clampX = 0
-		if image.left < 0 then
-			clampX = image.left
-			--print("Clamped at X:",clampX)
-		end
-		local clampY = 0
-		if image.top < 0 then
-			clampY = image.top
-			--print("Clamped at Y:",clampY)
-		end
-		local clampW
-		if image.left + image.right > image.globalWidth then
-			clampW = image.globalWidth - image.left
-			--print("Clamped at W:",clampW)
+	if image.left < 0 then
+		clampX = image.left
+		--print("Clamped at X:",clampX)
+	end
+	local clampY = 0
+	if image.top < 0 then
+		clampY = image.top
+		--print("Clamped at Y:",clampY)
+	end
+	local clampW
+	if image.right > image.globalWidth then
+		clampW = image.globalWidth - image.left
+		--print("Clamped at W:",clampW)
+	else
+		clampW = image.right - image.left
+	end
+	local clampH
+	if image.bottom > image.globalHeight then
+		clampH = image.globalHeight - image.top
+		--print("Clamped at H:",clampH)
+	else
+		clampH = image.bottom - image.top
+	end
+
+	
+	local dataSize = clampW*clampH*4
+	-- Shouldn't ever be negative. But the docs doesn't spesify.
+	if dataSize < 0 then dataSize = 0 end
+
+	if askIsImageLayer then
+		if dataSize == 0 then
+			return false
 		else
-			clampW = image.right - image.left
+			return true -- early out
 		end
-		local clampH
-		if image.top + image.bottom > image.globalHeight then
-			clampH = image.globalHeight - image.top
-			--print("Clamped at H:",clampH)
+	end
+
+	local C_data
+	local imageData
+	if dataSize ~= 0 then
+		imageData = love.image.newImageData(clampW + clampX, clampH + clampY)
+		C_data = ffi.cast("char *", imageData:getPointer())
+	end
+	local lineInfo = {}
+	--print(clampW,clampH)
+	--print(image.channelPointer[1])
+	--print(image.channelPointer[2])
+	--print(image.channelPointer[3])
+	--print(image.channelPointer[4])
+	--print(image.left, image.right)
+	for CC = 1 , #image.channelID do
+		artal.count = image.channelPointer[CC]
+		local channelCompression = artal:ink(nil,2)
+		local alphaOpacity = 1
+		local cPixelPos
+		if image.channelID[CC] == -1 then
+			cPixelPos = 3
+			alphaOpacity = image.opacity / 255
+		elseif image.channelID[CC] == 0 then
+			cPixelPos = 0
+		elseif image.channelID[CC] == 1 then
+			cPixelPos = 1
+		elseif image.channelID[CC] == 2 then
+			cPixelPos = 2
 		else
-			clampH = image.bottom - image.top
+			assert(false,"Artal: Unsupported channel id/mode.")
 		end
 
 		
-		local dataSize = clampW*clampH*4
-		-- Shouldn't ever be negative. But the docs doesn't spesify.
-		if dataSize < 0 then dataSize = 0 end
+		if channelCompression == 1 then
 
-		if askIsImageLayer then
-			if dataSize == 0 then
-				return false
-			else
-				return true -- early out
+			for LINE = 1 , image.totalHeight do
+				-- Bytes per line
+				lineInfo[LINE] = artal:ink(nil,2)
+				--print(CC,lineInfo[LINE] )
 			end
-		end
-
-		local C_data
-		local imageData
-		if dataSize ~= 0 then
-			imageData = love.image.newImageData(clampW + clampX, clampH + clampY)
-			C_data = ffi.cast("char *", imageData:getPointer())
-		end
-		local lineInfo = {}
-		for CC = 1 , #image.channelID do
-			artal.count = image.channelPointer[CC]
-			local channelCompression = artal:ink(nil,2)
-
-			local alphaOpacity = 1
-			local cPixelPos
-			if image.channelID[CC] == -1 then
-				cPixelPos = 3
-				alphaOpacity = image.opacity / 255
-			elseif image.channelID[CC] == 0 then
-				cPixelPos = 0
-			elseif image.channelID[CC] == 1 then
-				cPixelPos = 1
-			elseif image.channelID[CC] == 2 then
-				cPixelPos = 2
-			else
-				assert(false,"Artal: Unsupported channel id/mode.")
-			end
-
 			
-			if channelCompression == 1 then
-				for LINE = 1 , image.totalHeight do
-					-- Bytes per line
-					lineInfo[LINE] = artal:ink(nil,2)
-					--print(CC,lineInfo[LINE] )
-				end
-				
-				local yPixelPos = clampY
-				for LINE = 1, image.totalHeight do
+			local yPixelPos = clampY
+			for LINE = 1, image.totalHeight do
 
-					--print(LINE)
+				--print(LINE)
 
-					local countEnd = artal.count + lineInfo[LINE]
-					--print(artal.count , countEnd,lineInfo[LINE])
-					--print("INTO")
+				local countEnd = artal.count + lineInfo[LINE]
+				--print(artal.count , countEnd,lineInfo[LINE])
+				--print("INTO")
 
-					--print("line",LINE,yPixelPos)
-					if yPixelPos >= 0 then
-						if yPixelPos < clampH + clampY then
-							local xPixelPos = clampX
-							while artal.count < countEnd do
+				--print("line",LINE,yPixelPos)
+				if yPixelPos >= 0 then
+					if yPixelPos < clampH + clampY then
+						local xPixelPos = clampX
+						while artal.count < countEnd do
 
-								local headByte = artal:ink(nil,1,"int")
-								--print("head",headByte)
-								if headByte >= 0 then
-									for i = 1, 1 + headByte do
-										-- Literal pixels
-										local pixelValue = artal:ink(nil,1) * alphaOpacity
-										if xPixelPos >= 0 and xPixelPos < clampX+clampW then
-											-- Here be valid pixels
-											local pos = cPixelPos + (xPixelPos*4) + (yPixelPos*(clampW+clampX)*4)
-											--print(CC,xPixelPos,yPixelPos,pos,pixelValue,(clampW+clampX))
-											C_data[pos] = pixelValue
-										end
-										xPixelPos = xPixelPos + 1
-									end
-								elseif headByte > -128 then
+							local headByte = artal:ink(nil,1,"int")
+							--print("head",headByte)
+							if headByte >= 0 then
+								for i = 1, 1 + headByte do
+									-- Literal pixels
 									local pixelValue = artal:ink(nil,1) * alphaOpacity
-									for i = 1 , 1 - headByte do
-										-- Repeat pixels
-										if xPixelPos >= 0 and xPixelPos < clampX+clampW then
-											-- Here be valid pixels
-											local pos = cPixelPos + (xPixelPos*4) + (yPixelPos*(clampW+clampX)*4)
-											--print(CC,xPixelPos,yPixelPos,pos,pixelValue,(clampW+clampX))
-											C_data[pos] = pixelValue
-										end
-										xPixelPos = xPixelPos + 1
+									if xPixelPos >= 0 and xPixelPos < clampX+clampW then
+										-- Here be valid pixels
+										local pos = cPixelPos + (xPixelPos*4) + (yPixelPos*(clampW+clampX)*4)
+										--print(CC,xPixelPos,yPixelPos,pos,pixelValue,(clampW+clampX))
+										C_data[pos] = pixelValue
 									end
-								else
-									artal:ink(nil,1)
+									xPixelPos = xPixelPos + 1
 								end
+							elseif headByte > -128 then
+								local pixelValue = artal:ink(nil,1) * alphaOpacity
+								for i = 1 , 1 - headByte do
+									-- Repeat pixels
+									if xPixelPos >= 0 and xPixelPos < clampX+clampW then
+										-- Here be valid pixels
+										local pos = cPixelPos + (xPixelPos*4) + (yPixelPos*(clampW+clampX)*4)
+										--print(CC,xPixelPos,yPixelPos,pos,pixelValue,(clampW+clampX))
+										C_data[pos] = pixelValue
+									end
+									xPixelPos = xPixelPos + 1
+								end
+							else
+								artal:ink(nil,1)
 							end
-							--assert(artal.count == countEnd,"Artal: Error reading layerdata.")
-						else
-							--print(yPixelPos)
-							break -- All pixels you want are now filled.
 						end
+						--assert(artal.count == countEnd,"Artal: Error reading layerdata.")
 					else
-						artal.count = countEnd
+						--print(yPixelPos)
+						break -- All pixels you want are now filled.
 					end
-					yPixelPos = yPixelPos + 1
+				else
+					artal.count = countEnd
 				end
-			elseif channelCompression == 0 then
-				--artal.count = (yPixelPos*clampW*4)
-				for y = -clampY, clampH - 1 do
-					for x = -clampX, clampW - 1 do
-						--print(x,y)
-						local pixelPos = (y*(clampW)+x)*4+cPixelPos
-						local dataPos = y*(clampW)+x
-						C_data[pixelPos] = C_fileData[artal.count + dataPos] * alphaOpacity
-						--print(pixelPos, dataPos)
-					end
+				yPixelPos = yPixelPos + 1
+			end
+		elseif channelCompression == 0 then
+
+			--if(CC == 2) then
+			--artal.count = (yPixelPos*clampW*4)
+			for y = -clampY, clampH - 1 do
+				for x = -clampX, clampW - 1 do
+					--print(x,y)
+					local pixelPos = (y*(clampW)+x)*4+cPixelPos
+					local dataPos = y*(clampW)+x
+					C_data[pixelPos] = C_fileData[artal.count + dataPos] * alphaOpacity
+					--print(x, y, pixelPos, dataPos, C_fileData[artal.count + dataPos])
 				end
-			else
-				assert(false, "Artal: Unsupported compression mode:"..channelCompression)
 			end
+			--end
+		else
+			assert(false, "Artal: Unsupported compression mode:"..channelCompression)
 		end
-		if #image.channelID == 3 then -- Set opacity.
-			for i = 0, dataSize,4 do
-				C_data[i+3] = image.opacity
-			end
+	end
+	if #image.channelID == 3 then -- Set opacity.
+		for i = 0, dataSize,4 do
+			C_data[i+3] = image.opacity
 		end
+	end
 
 	if dataSize == 0 then
 		return nil
@@ -649,6 +663,7 @@ function artalFunction.newPSD(fileNameOrData, structureFlagOrNumber)
 		
 
 		if artal.compression == 1 then
+
 			for CC = 1, artal.channelCount do
 				artal.channel[CC] = directFileReader(C_fileData)
 				artal.channel[CC].count = artal.count
@@ -762,6 +777,7 @@ function artalFunction.newPSD(fileNameOrData, structureFlagOrNumber)
 
 		for LC = 1 , math.abs(artal.layerTotalCount) do
 			local layerLoadData = imageDataForLayer(artal,artal.layer[LC],GC_C_fileData)
+			
 			if artal.layer[LC].folder == 1 or artal.layer[LC].folder == 2 or artal.layer[LC].folder == 3 then
 				imageTable[LC] = defaultLoadFolderFunction(artal.layer[LC],layerLoadData)
 			else
