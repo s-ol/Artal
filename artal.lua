@@ -23,118 +23,7 @@ SOFTWARE.
 --]]
 
 local ffi = require("ffi")
-local utf8 = require("utf8")
-
-local _assert, _error = assert, error
-local function assert(test, message)
-  _assert(test, debug.traceback("Artal: " .. message, 2))
-end
-local function error(message)
-  _error(debug.traceback("Artal: " .. message, 2))
-end
-
-local function bytes2word(first,second,third,forth) -- first is the direct hex -- Lack 8 length support
-  local result = first
-
-  if forth ~= nil then
-    result = result + second * ( 0xff +1)
-    result = result + third * ( 0xffff +1)
-    result = result + forth * ( 0xffffff +1)
-  elseif third ~= nil then
-    result = result + second * ( 0xff +1)
-    result = result + third * ( 0xffff +1)
-  elseif second ~= nil then
-    result = result + second * ( 0xff +1)
-  end
-
-  return result
-end
-
-local PSDReader = {}
-function PSDReader.new(filePointer, start, length, parent)
-  local self = setmetatable({}, { __index = PSDReader })
-
-  self.filePointer = filePointer
-  self.count = start or 0
-  self.stop = length and self.count + length
-  self.parent = parent
-
-  return self
-end
-
--- push a sub-reader that can optionally be limited by length
-function PSDReader:push(length)
-  if self.child then error("can't double-push") end
-  self.child = PSDReader.new(self.filePointer, self.count, length, self)
-
-  return self.child
-end
-
--- stop using a sub-reader
--- if sub-reader is limited, skips parent past the limit
--- otherwise, skips to sub-readers parent last position
-function PSDReader:pop()
-  if not self.parent then error("not a child reader") end
-
-  self.parent.count = self.stop or self.count
-
-  self.parent.child = nil
-end
-
-function PSDReader:skip(length)
-  self.count = self.count + length
-end
-
-function PSDReader:inkUint(length)
-  length = length or 1
-
-  assert(length == 1 or length == 2 or length == 4 ,"ink length must be a power of 2, no higher than 4")
-  if self.stop then assert(self.stop >= self.count + length, "attempting to read out of bounds") end
-
-  local first = self.filePointer[self.count]
-  local second
-  local third
-  local forth
-
-  if length == 2 then
-    second = self.filePointer[self.count+1]
-    first, second = second, first
-  elseif length == 4 then
-    second = self.filePointer[self.count+1]
-    third = self.filePointer[self.count+2]
-    forth = self.filePointer[self.count+3]
-    first, second, third, forth = forth, third, second, first
-  end
-
-  self.count = self.count + length
-
-  return bytes2word(first, second, third, forth)
-end
-
-function PSDReader:inkInt(length)
-  local num = self:inkUint(length)
-
-  if num >= 2^(length*8-1) then
-    return num - 2^(length*8)
-  end
-
-  return num
-end
-
-function PSDReader:inkString(length, step)
-  step = step or 1
-
-  local res = ""
-  for i = 1, length do
-    word = self:inkUint(step)
-
-    if word > 31 and word < 127 then
-      res = res .. string.char(word)
-    end
-  end
-
-  return res
-end
+local BinaryReader = require("binaryReader")
 
 local function readHeader(reader)
   local reader = reader:push(26)
@@ -164,6 +53,12 @@ local function readImageResources(reader)
   reader = reader:push(reader:inkUint(4))
   -- TODO: stub
   reader:pop()
+end
+
+local function readExtraInfo(key, reader, layer)
+  if key == "luni" then
+    layer.name = reader:inkUnicodeString(reader.stop - reader.count)
+  end
 end
 
 local function readLayers(reader)
@@ -197,18 +92,25 @@ local function readLayers(reader)
 
     local extra = reader:push(reader:inkUint(4))
       local maskAdjustment = extra:push(extra:inkUint(4))
-      assert(
-        maskAdjustment.count == maskAdjustment.stop,
-        "expected layer mask/adjustment layer data to be empty, length was " .. maskAdjustment.stop - maskAdjustment.count
-      )
+      -- TODO: stub
       maskAdjustment:pop()
 
-      local blendingRanges = extra:push(reader:inkUint(4))
+      local blendingRanges = extra:push(extra:inkUint(4))
+      -- TODO: stub
       blendingRanges:pop()
 
-      extra:skip(44)
       local nameLength = extra:inkUint(1)
       layer.name = extra:inkString(nameLength)
+
+      extra:padTo(2)
+
+      while extra.count < extra.stop do
+        assert(extra:inkString(4) == "8BIM", "additional layer info signature wrong")
+        local key = extra:inkString(4)
+        local info = extra:push(extra:inkUint(4))
+        readExtraInfo(key, info, layer)
+        info:pop()
+      end
     extra:pop()
 
 
@@ -250,7 +152,7 @@ return {
       "file is not a valid filename or FileData"
     )
 
-    local reader = PSDReader.new(ffi.cast("uint8_t *", file:getPointer()), nil, file:getSize())
+    local reader = BinaryReader.new(ffi.cast("uint8_t *", file:getPointer()), nil, file:getSize())
 
     local result = {}
 
