@@ -176,66 +176,6 @@ function love.draw()
 end
 ```
 
-### writetable.lua
-Create a string from tables. So you can inspect tables created by artal.newPSD(). The structure below is generated from writetable.lua. And you can use that to visualize your own tables as well.
-```lua
-local writetable = require("writetable")
-tableAsString = writetable.createStringFromTable(table)
-```
-
-```lua
-{
-	-- Table with 4 indexes, and 2 string keys.
-	-- Array values are all of type: "table".
-	height = 200,
-	width = 200,
-	[1] = 
-	{
-		-- Table with 7 string keys.
-		oy = 0,
-		image = "Image: 0x6b119bff80",
-		ox = 0,
-		type = "image",
-		blend = "norm",
-		name = "Background",
-		clip = false,
-	},
-	[2] = 
-	{
-		-- Table with 7 string keys.
-		oy = -40,
-		image = "Image: 0x6b119c0140",
-		ox = -68,
-		type = "image",
-		blend = "norm",
-		name = "Red Blob",
-		clip = false,
-	},
-	[3] = 
-	{
-		-- Table with 7 string keys.
-		oy = -17,
-		image = "Image: 0x6b119c0220",
-		ox = -95,
-		type = "image",
-		blend = "norm",
-		name = "Blue Blob",
-		clip = true,
-	},
-	[4] = 
-	{
-		-- Table with 7 string keys.
-		oy = -27,
-		image = "Image: 0x6b12844c80",
-		ox = -8,
-		type = "image",
-		blend = "over",
-		name = "Multiple Blobs",
-		clip = true,
-	},
-}
-```
-
 ### psdShader.lua:
 NOTE: This library is very much incomplete. But it's at least a starting point for you to understand how you can create shaders that mimics photoshop effects.
 
