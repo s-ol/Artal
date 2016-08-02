@@ -1,14 +1,17 @@
-local tests = {
-  "hierarchy"
-}
+local tests = {}
+for i, file in ipairs(love.filesystem.getDirectoryItems("cases")) do
+  if file:match(".lua$") then
+    local thread = love.thread.newThread("cases/" .. file)
+    thread:start()
 
-for i, file in ipairs(tests) do
-  local test = {
-    thread = love.thread.newThread(file .. '.lua'),
-    name = file
-  }
-  test.thread:start()
-  tests[i] = test
+    table.insert(
+      tests,
+      {
+        name = file,
+        thread = thread,
+      }
+    )
+  end
 end
 
 local RUNNING, SUCCESS, FAILED = {255, 255, 0}, {0, 255, 0}, {255, 0, 0}
@@ -25,6 +28,8 @@ function love.draw()
       elseif test.thread:getError() then
         color = FAILED
         test.error = test.thread:getError()
+        print("ERROR in " .. test.name .. ":")
+        print(test.error)
       else
         color = SUCCESS
       end

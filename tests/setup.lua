@@ -1,5 +1,6 @@
 package.path = "../?.lua;" .. package.path
 
+require "love.image"
 require "love.graphics"
 require "love.filesystem"
 artal = require "artal"

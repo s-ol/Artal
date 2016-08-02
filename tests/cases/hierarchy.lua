@@ -23,5 +23,5 @@ deepAssert(
       name = "top",
     },
   },
-  artal.newPSD("hierarchy.psd", "info")
+  artal.newPSD("cases/hierarchy.psd", "info")
 )
