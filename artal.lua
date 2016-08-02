@@ -25,11 +25,21 @@ SOFTWARE.
 local ffi = require("ffi")
 local utf8 = require("utf8")
 local artalFunction = {}
-artalFunction.version = "1.1"
+artalFunction.version = "1.2"
 
 --[[~~~~~~~~~~~~~~~~~~ Version 1.1 change log ~~~~~~~~~~~~~~~~~~
 -- Fixed error in the image loading routine that caused it to incorrectly 
    determine the size of image. Thus loading garbage data.
+
+~~~~~~~~~~~~~~~~~~~~~~ Version 1.2 change log ~~~~~~~~~~~~~~~~~~
+-- Thanks to s-ol for this pull request. https://github.com/s-ol
+
+-- Added support for Unicode / longer names in layers.
+-- Added a test suite
+-- Hierarchy test
+-- Unicode test
+-- Folder unicode name test
+
 --]]
 
 local function hexToNumber(first,second,third,forth) -- first is the direct hex -- Lack 8 length support
