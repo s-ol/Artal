@@ -23,6 +23,7 @@ SOFTWARE.
 --]]
 
 local ffi = require("ffi")
+local utf8 = require("utf8")
 local artalFunction = {}
 artalFunction.version = "1.1"
 
@@ -91,6 +92,35 @@ local function directFileReader(C_fileData)
 		end
 		--print(name..": ",self[name])
 		return resultString
+	end
+
+	function self:inkUnicodeString(name , stringLength)
+		-- Step length needs to grab 2 bytes in some cases.
+		assert(self[name] == nil , "Artal: Name already taken.")
+
+		self.count = self.count + 4
+		stringLength = (stringLength - 4) / 2
+
+		local result = {}
+		for i = 1 , stringLength do
+
+			local first = C_fileData[self.count]
+			local second = C_fileData[self.count+1]
+
+
+			local byte = hexToNumber(second, first)
+			self.count = self.count + 2
+
+			if byte ~= 0 then
+				table.insert(result, byte)
+			end
+		end
+
+		result = utf8.char(unpack(result))
+		if name ~= nil then
+			self[name] = result
+		end
+		return result
 	end
 
 	function self:ink(name , stepLength, div) -- Lack 8 length support
@@ -562,7 +592,7 @@ function artalFunction.newPSD(fileNameOrData, structureFlagOrNumber)
 
 
 			if key == "luni" then
-				artal.layer[LC]:inkString("luniName",length)
+				artal.layer[LC].betterName = artal.layer[LC]:inkUnicodeString("luniName",length)
 			elseif key == "lnsr" then
 				artal.layer[LC]:inkString("layerID",4)
 			elseif key == "lyid" then
