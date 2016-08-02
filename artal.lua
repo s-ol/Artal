@@ -583,7 +583,7 @@ function artalFunction.newPSD(fileNameOrData, structureFlagOrNumber)
 			artal.layer[LC].count = artal.layer[LC].count + math.ceil((artal.layer[LC].nameLength+1)/4)*4 - ((artal.layer[LC].nameLength+1)/4)*4
 		end
 
-
+		local syncFolderNameFlag = false
 		-- Additional Layer Information
 		while artal.layer[LC]:inkString(nil , 4) == "8BIM" do
 			local key = artal.layer[LC]:inkString(nil,4)
@@ -623,17 +623,9 @@ function artalFunction.newPSD(fileNameOrData, structureFlagOrNumber)
 				if artal.layer[LC].folder == 3 then
 					table.insert(opacityBakingTable,LC)
 				elseif artal.layer[LC].folder == 1 or artal.layer[LC].folder == 2 then
-					local startCounter = opacityBakingTable[#opacityBakingTable]
-
-					artal.layer[startCounter].betterName = artal.layer[LC].name
-					artal.layer[startCounter].betterBlend = artal.layer[LC].betterBlend
-					artal.layer[startCounter].betterCliping = artal.layer[LC].clipping
-					for LCback = startCounter, LC - 1 do
-						artal.layer[LCback].bakedOpacity =
-							artal.layer[LCback].bakedOpacity * (artal.layer[LC].opacity/255)
-						--print(artal.layer[LCback].name,artal.layer[LCback].bakedOpacity)
-					end
-					table.remove(opacityBakingTable)
+					-- There is no guarantee that "luniName" has been set at this point
+					-- so I defer the renaming of folders until after all flags have been read.
+					syncFolderNameFlag = true
 				end
 				if length >= 12 then
 					assert(artal.layer[LC]:inkString(nil,4) == "8BIM" , "Artal: lsct signature is not correct.")
@@ -660,6 +652,22 @@ function artalFunction.newPSD(fileNameOrData, structureFlagOrNumber)
 			end
 
 		end
+
+		if syncFolderNameFlag == true then
+			local startCounter = opacityBakingTable[#opacityBakingTable]
+
+			artal.layer[startCounter].betterName = artal.layer[LC].betterName
+			artal.layer[startCounter].betterBlend = artal.layer[LC].betterBlend
+			artal.layer[startCounter].betterCliping = artal.layer[LC].betterClipping
+			for LCback = startCounter, LC - 1 do
+				artal.layer[LCback].bakedOpacity =
+					artal.layer[LCback].bakedOpacity * (artal.layer[LC].opacity/255)
+				--print(artal.layer[LCback].name,artal.layer[LCback].bakedOpacity)
+			end
+			table.remove(opacityBakingTable)
+		end
+
+
 
 		-- Back up the last false while loop 
 		artal.layer[LC].count = artal.layer[LC].count - 4 
