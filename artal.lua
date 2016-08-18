@@ -55,12 +55,6 @@ local function readImageResources(reader)
   reader:pop()
 end
 
-local function readExtraInfo(key, reader, layer)
-  if key == "luni" then
-    layer.name = reader:inkUnicodeString(reader.stop - reader.count)
-  end
-end
-
 local function readLayers(reader)
   reader = reader:push(reader:inkUint(4))
   local layerCount = reader:inkInt(2)
@@ -101,18 +95,41 @@ local function readLayers(reader)
 
       local nameLength = extra:inkUint(1)
       layer.name = extra:inkString(nameLength)
-
-      extra:padTo(2)
+      nameLength = nameLength + 1
+      if nameLength % 4 > 0 then
+        extra:skip(4 - (nameLength % 4))
+      end
 
       while extra.count < extra.stop do
         assert(extra:inkString(4) == "8BIM", "additional layer info signature wrong")
         local key = extra:inkString(4)
         local info = extra:push(extra:inkUint(4))
-        readExtraInfo(key, info, layer)
+        if key == "luni" then -- unicode layer name
+          layer.name = info:inkUnicodeString(info.stop - info.count)
+          if layer.other then layer.other.name = layer.name end
+        elseif key == "lsct" then -- section divider setting
+          local type = info:inkUint(4)
+          if type == 3 then
+            layer.type = "still_open"
+          elseif type == 1 or type == 2 then -- open / close
+            for i=#layers, 1, -1 do
+              local other = layers[i]
+              if other.type == "still_open" then
+                other.type = "open"
+                other.name = layer.name
+                layer.other = other
+                -- TODO: opacity baking
+                break
+              end
+            end
+            assert(layer.other, "couldnt't find 'open' layer for 'close' layer")
+            layer.type = "close"
+          end
+          -- TODO: optional fields
+        end
         info:pop()
       end
     extra:pop()
-
 
     table.insert(layers, layer)
   end
@@ -160,7 +177,10 @@ return {
     readColorModeData(reader)
     readImageResources(reader)
     local layers = readLayerMaskInfo(reader)
+    for i, layer in ipairs(layers) do
+      result[i] = layer
+    end
 
-    return layers
+    return result
   end,
 }
