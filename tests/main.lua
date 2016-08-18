@@ -2,7 +2,7 @@ local tests = {}
 for i, file in ipairs(love.filesystem.getDirectoryItems("cases")) do
   if file:match(".lua$") then
     local thread = love.thread.newThread("cases/" .. file)
-    thread:start()
+    if i == 1 then thread:start() end
 
     table.insert(
       tests,
@@ -23,6 +23,13 @@ function love.draw()
     if test.thread:isRunning() then
       color = RUNNING
     else
+      if not test.done then
+        test.done = true
+        if tests[i+1] then
+          tests[i+1].thread:start()
+        end
+      end
+
       if test.error then
         color = FAILED
       elseif test.thread:getError() then

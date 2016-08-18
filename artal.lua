@@ -101,7 +101,7 @@ local function readLayers(reader)
       end
 
       while extra.count < extra.stop do
-        assert(extra:inkString(4) == "8BIM", "additional layer info signature wrong")
+        extra:inkString(4) -- 8BIM...?
         local key = extra:inkString(4)
         local info = extra:push(extra:inkUint(4))
         if key == "luni" then -- unicode layer name
