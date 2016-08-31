@@ -5,6 +5,19 @@ require "love.graphics"
 require "love.filesystem"
 artal = require "artal"
 
+local ffi = require "ffi"
+ffi.cdef [[
+  int memcmp(const void *s1, const void *s2, size_t n);
+]]
+
+function compareData(a, b)
+  return 0 == ffi.C.memcmp(
+    a:getPointer(),
+    b:getPointer(),
+    math.min(a:getSize(), b:getSize())
+  )
+end
+
 function deepAssert(shape, table, path)
   path = path or ""
 
@@ -19,21 +32,37 @@ function deepAssert(shape, table, path)
           type(actual)
         )
       )
-    end
-
-    if type(expected) == "table" then
-      deepAssert(expected, actual, path .. "." .. key)
-    else
+    elseif type(expected) == "userdata" and expected.type then
       assert(
-        expected == actual,
+        actual.type and expected:type() == actual:type(),
         string.format(
-          "value mismatch at '%s': expected %s '%s' but got %s '%s'",
+          "type mismatch at '%s': expected %s but got '%s'",
           path .. "." .. key,
-          type(expected), expected,
-          type(actual), actual
+          expected:type(),
+          actual.type and actual:type() or type(actual)
         )
       )
     end
-  end
-end
 
+    local compare = function (a, b) return a == b end
+    if type(expected) == "table" then
+      compare = deepAssert
+    elseif type(expected) == "userdata" then
+      if expected.type and (expected:type() == "ImageData" or expected:type() == "FileData") then
+        compare = compareData
+      end
+    end
+
+    assert(
+      compare(expected, actual, path .. "." .. key),
+      string.format(
+        "value mismatch at '%s': expected %s '%s' but got %s '%s'",
+        path .. "." .. key,
+        type(expected), expected,
+        type(actual), actual
+      )
+    )
+  end
+
+  return true
+end
