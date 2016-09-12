@@ -32,25 +32,25 @@ local function error(message)
   _error(debug.traceback("Artal: " .. message, 2))
 end
 
-local function bytes2word(first,second,third,forth) -- first is the direct hex -- Lack 8 length support
+local function bytes2word(first, second, third, fourth)
   local result = first
 
   if forth ~= nil then
-    result = result + second * ( 0xff +1)
-    result = result + third * ( 0xffff +1)
-    result = result + forth * ( 0xffffff +1)
+    result = result + second * (1 + 0xff)
+    result = result + third  * (1 + 0xffff)
+    result = result + fourth * (1 + 0xffffff)
   elseif third ~= nil then
-    result = result + second * ( 0xff +1)
-    result = result + third * ( 0xffff +1)
+    result = result + second * (1 + 0xff)
+    result = result + third  * (1 + 0xffff)
   elseif second ~= nil then
-    result = result + second * ( 0xff +1)
+    result = result + second * (1 + 0xff)
   end
 
   return result
 end
 
 local BinaryReader = {}
-function BinaryReader.new(filePointer, start, length, parent)
+function BinaryReader.new(filePointer, start, parent, length)
   local self = setmetatable({}, { __index = BinaryReader })
 
   self.filePointer = filePointer
@@ -62,9 +62,9 @@ function BinaryReader.new(filePointer, start, length, parent)
 end
 
 -- push a sub-reader that can optionally be limited by length
-function BinaryReader:push(length)
+function BinaryReader:push(...)
   if self.child then error("can't double-push") end
-  self.child = BinaryReader.new(self.filePointer, self.count, length, self)
+  self.child = BinaryReader.new(self.filePointer, self.count, self, ...)
 
   return self.child
 end
@@ -98,7 +98,7 @@ function BinaryReader:inkUint(length)
   local first = self.filePointer[self.count]
   local second
   local third
-  local forth
+  local fourth
 
   if length == 2 then
     second = self.filePointer[self.count+1]
@@ -106,13 +106,13 @@ function BinaryReader:inkUint(length)
   elseif length == 4 then
     second = self.filePointer[self.count+1]
     third = self.filePointer[self.count+2]
-    forth = self.filePointer[self.count+3]
-    first, second, third, forth = forth, third, second, first
+    fourth = self.filePointer[self.count+3]
+    first, second, third, fourth = fourth, third, second, first
   end
 
   self.count = self.count + length
 
-  return bytes2word(first, second, third, forth)
+  return bytes2word(first, second, third, fourth)
 end
 
 function BinaryReader:inkInt(length)

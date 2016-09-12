@@ -25,6 +25,43 @@ SOFTWARE.
 local ffi = require("ffi")
 local BinaryReader = require("binaryReader")
 
+function readImage(reader, width, height, channelCount)
+  if width == 0 or height == 0 then
+    reader:skip(1) -- skip compression
+    return nil
+  end
+
+  reader = reader:push()
+  local imageData = love.image.newImageData(width, height)
+  local data = ffi.cast("uint8_t *", imageData:getPointer())
+
+  local compression = reader:inkUint(2)
+
+  if compression == 0 then
+    local channelSize = width * height
+
+    -- photoshop:      LÖVE/GL:
+    --  RRRR...         RGBA
+    --  GGGG...         RGBA
+    --  BBBB...         RGBA
+    --  AAAA...         RGBA
+    --                  ...
+    for pixel = 0, channelSize*4, 4 do
+      data[pixel + 0] = reader.filePointer[reader.count]
+      data[pixel + 1] = reader.filePointer[reader.count + channelSize]
+      data[pixel + 2] = reader.filePointer[reader.count + channelSize + channelSize]
+      if channelCount > 3 then
+        data[pixel + 3] = reader.filePointer[reader.count + channelSize + channelSize + channelSize]
+      end
+
+      reader:skip(1)
+    end
+  end
+
+  reader:pop()
+  return imageData
+end
+
 local function readHeader(reader)
   local reader = reader:push(26)
   assert(reader:inkString(4) == "8BPS", ".psd magic wrong")
@@ -32,16 +69,16 @@ local function readHeader(reader)
 
   reader:skip(6) -- reserved space
 
-  local channels = reader:inkUint(2)
+  local channelCount = reader:inkUint(2)
   local width, height = reader:inkUint(4), reader:inkUint(4)
   local depth = reader:inkUint(2)
   local colorMode = reader:inkUint(2)
 
   assert(depth == 8, "currently only 8-bit images are supported, depth was " .. depth)
-  assert(colorMode == 3, "currently only RGB images are supported, colorModa was " .. colorMode)
+  assert(colorMode == 3, "currently only RGB images are supported, colorMode was " .. colorMode)
   reader:pop()
 
-  return width, height
+  return width, height, channelCount
 end
 
 local function readColorModeData(reader)
@@ -70,11 +107,15 @@ local function readLayers(reader)
     local channelCount = reader:inkUint(2)
     assert(channelCount == 3 or channelCount == 4, "only 3 or 4 channels supported per layer, channelCount was " .. channelCount)
 
+    layer.channels = {}
     for i=1, channelCount do
+      -- local .count = .count starting at 'length'!
       local id = reader:inkInt(2)
       local dataLength = reader:inkUint(4)
 
       assert(id >= -1 and id <= 2, "unsupported channel ID: " .. id)
+
+      table.insert(layer.channels, { id = id, length = dataLength })
     end
 
     assert(reader:inkString(4) == "8BIM", "BlendMode signature wrong")
@@ -134,6 +175,15 @@ local function readLayers(reader)
     table.insert(layers, layer)
   end
 
+  for i, layer in ipairs(layers) do
+    layer.image = readImage(
+      reader,
+      layer.right - layer.left,
+      layer.bottom - layer.top,
+      #layer.channels
+    )
+  end
+
   reader:pop()
   return layers
 end
@@ -144,15 +194,11 @@ local function readGlobalLayerMask(reader)
   reader:pop()
 end
 
-local function readAdditionalLayerData(reader)
-end
-
 local function readLayerMaskInfo(reader)
   reader = reader:push(reader:inkUint(4))
 
   local layers = readLayers(reader)
   readGlobalLayerMask(reader)
-  readAdditionalLayerData(reader)
 
   reader:pop()
   return layers
@@ -166,20 +212,22 @@ return {
 
     assert(
       type(file) == "userdata" and file:type() == "FileData",
-      "file is not a valid filename or FileData"
+      ("file is not a valid filename or FileData: %s"):format(file)
     )
 
     local reader = BinaryReader.new(ffi.cast("uint8_t *", file:getPointer()), nil, file:getSize())
 
     local result = {}
 
-    result.width, result.height = readHeader(reader)
+    local width, height, channelCount = readHeader(reader)
+    result.width, result.height = width, height
     readColorModeData(reader)
     readImageResources(reader)
     local layers = readLayerMaskInfo(reader)
     for i, layer in ipairs(layers) do
       result[i] = layer
     end
+    result.composed = readImage(reader, width, height, channelCount)
 
     return result
   end,
