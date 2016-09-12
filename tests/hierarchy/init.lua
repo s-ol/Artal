@@ -1,4 +1,5 @@
 require "setup"
+path = select(1, ...)
 
 deepAssert(
   {
@@ -23,5 +24,5 @@ deepAssert(
       name = "top",
     },
   },
-  artal.newPSD("cases/hierarchy.psd", "info")
+  artal.newPSD(path .. "test.psd", "info")
 )

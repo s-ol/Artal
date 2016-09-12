@@ -1,13 +1,13 @@
 local tests = {}
-for i, file in ipairs(love.filesystem.getDirectoryItems("cases")) do
-  if file:match(".lua$") then
-    local thread = love.thread.newThread("cases/" .. file)
-    if i == 1 then thread:start() end
+for i, test in ipairs(love.filesystem.getDirectoryItems("/")) do
+  if love.filesystem.exists(test .. "/init.lua") then
+    local thread = love.thread.newThread(test .. "/init.lua")
+    if i == 1 and thread then thread:start(test .. "/") end
 
     table.insert(
       tests,
       {
-        name = file,
+        name = test,
         thread = thread,
       }
     )
@@ -26,7 +26,7 @@ function love.draw()
       if not test.done then
         test.done = true
         if tests[i+1] then
-          tests[i+1].thread:start()
+          tests[i+1].thread:start(tests[i+1].name .. "/")
         end
       end
 
