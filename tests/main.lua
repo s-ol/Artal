@@ -1,4 +1,4 @@
-local tests = {}
+local tests, visualization = {}
 for i, test in ipairs(love.filesystem.getDirectoryItems("/")) do
   if love.filesystem.exists(test .. "/init.lua") then
     local thread = love.thread.newThread(test .. "/init.lua")
@@ -55,8 +55,21 @@ function love.draw()
       love.graphics.printf(hovered.error, 10, 50, love.graphics.getWidth() - 20)
     end
   end
+
+  love.graphics.translate(0, 50)
+  if visualization then visualization() end
 end
 
 function love.keypressed(key)
   if key == "escape" then love.event.push "quit" end
+end
+
+function love.mousepressed(x, y)
+  visualization = nil
+  local selected = tests[math.ceil(x / 20)]
+  if selected then
+    local okay, mod = pcall(require, selected.name .. ".visualize")
+    if okay then visualization = mod end
+    print(mod)
+  end
 end

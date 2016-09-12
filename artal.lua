@@ -40,7 +40,7 @@ function readImage(reader, width, height, channelCount)
   if compression == 0 then
     local channelSize = width * height
 
-    -- photoshop:      LÖVE/GL:
+    -- Photoshop:      LÖVE/GL:
     --  RRRR...         RGBA
     --  GGGG...         RGBA
     --  BBBB...         RGBA
@@ -52,10 +52,14 @@ function readImage(reader, width, height, channelCount)
       data[pixel + 2] = reader.filePointer[reader.count + channelSize + channelSize]
       if channelCount > 3 then
         data[pixel + 3] = reader.filePointer[reader.count + channelSize + channelSize + channelSize]
+      else
+        data[pixel + 3] = 255
       end
 
       reader:skip(1)
     end
+  elseif compression == 1 then
+    --print("compression not currently supported")
   end
 
   reader:pop()
@@ -109,7 +113,6 @@ local function readLayers(reader)
 
     layer.channels = {}
     for i=1, channelCount do
-      -- local .count = .count starting at 'length'!
       local id = reader:inkInt(2)
       local dataLength = reader:inkUint(4)
 
@@ -142,7 +145,7 @@ local function readLayers(reader)
       end
 
       while extra.count < extra.stop do
-        extra:inkString(4) -- 8BIM...?
+        assert(extra:inkString(4) == "8BIM", "extra info signature wrong")
         local key = extra:inkString(4)
         local info = extra:push(extra:inkUint(4))
         if key == "luni" then -- unicode layer name
