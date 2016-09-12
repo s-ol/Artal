@@ -11,6 +11,7 @@ ffi.cdef [[
 ]]
 
 function compareData(a, b)
+  if not a:getSize() == b:getSize() then return false end
   return 0 == ffi.C.memcmp(
     a:getPointer(),
     b:getPointer(),

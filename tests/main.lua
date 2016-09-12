@@ -70,6 +70,5 @@ function love.mousepressed(x, y)
   if selected then
     local okay, mod = pcall(require, selected.name .. ".visualize")
     if okay then visualization = mod end
-    print(mod)
   end
 end
