@@ -59,11 +59,48 @@ function readImage(reader, width, height, channelCount)
       reader:skip(1)
     end
   elseif compression == 1 then
+    local channels = {}
+    for i=1,channelCount do
+      channels[i] = {}
+      for l=1,height do
+        channels[i][l] = reader:inkUint(1)
+      end
+    end
+
+    for i, channel in ipairs(channels) do
+      local channelOffset = i - 1
+      for l, length in ipairs(channel) do
+        local line = reader:push(length)
+
+        local pixel = (l - 1) * width
+
+        while line.count < line.stop do
+          local head = line:inkInt(2)
+          --if head >= 0 then
+          --  for i=1, 1 + head do
+          --    local value = line:inkUint(1)
+          --    data[pixel * 4 + channelOffset] = value
+          --    pixel = pixel + 1
+          --  end
+          --elseif head > -128 then
+          --  local value = line:inkUint(1)
+          --  for i=1, 1 - head do
+          --    data[pixel * 4 + channelOffset] = value
+          --    pixel = pixel + 1
+          --  end
+          --else
+          --  line:skip(1)
+          --end
+        end
+        line:pop()
+      end
+    end
+
     --print("compression not currently supported")
   end
 
   reader:pop()
-  return imageData
+  return love.graphics.newImage(imageData)
 end
 
 local function readHeader(reader)

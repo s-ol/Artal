@@ -4,7 +4,6 @@ local artal = require "artal"
 local image = artal.newPSD("layer_compressed_data/test.psd")
 for i, layer in ipairs(image) do
   if layer.image then
-    layer.image = love.graphics.newImage(layer.image)
     layer.expected = love.graphics.newImage("layer_compressed_data/expected_" .. i .. ".png")
   end
 end

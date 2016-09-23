@@ -7,7 +7,7 @@ for i, layer in ipairs(image) do
     assert(
       compareData(
         love.image.newImageData(path .. "expected_" .. i .. ".png"),
-        layer.image
+        layer.image:getData()
       ),
       ("layer %i ('%s') doesn't match expected image"):format(i, layer.name)
     )

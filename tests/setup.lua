@@ -1,7 +1,6 @@
 package.path = "../?.lua;" .. package.path
 
 require "love.image"
-require "love.graphics"
 require "love.filesystem"
 artal = require "artal"
 
@@ -9,6 +8,13 @@ local ffi = require "ffi"
 ffi.cdef [[
   int memcmp(const void *s1, const void *s2, size_t n);
 ]]
+
+love.graphics = love.graphics or {}
+function love.graphics.newImage(imagedata)
+  return {
+    getData = function () return imagedata end
+  }
+end
 
 function compareData(a, b)
   if not a:getSize() == b:getSize() then return false end
