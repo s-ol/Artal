@@ -1,6 +1,6 @@
 local tests, visualization = {}
 for i, test in ipairs(love.filesystem.getDirectoryItems("/")) do
-  if love.filesystem.exists(test .. "/init.lua") then
+  if love.filesystem.getInfo(test .. "/init.lua", "file") then
     local thread = love.thread.newThread(test .. "/init.lua")
     if i == 1 and thread then thread:start(test .. "/") end
 
@@ -14,7 +14,7 @@ for i, test in ipairs(love.filesystem.getDirectoryItems("/")) do
   end
 end
 
-local RUNNING, SUCCESS, FAILED = {255, 255, 0}, {0, 255, 0}, {255, 0, 0}
+local RUNNING, SUCCESS, FAILED = {1, 1, 0}, {0, 1, 0}, {1, 0, 0}
 
 function love.draw()
   love.graphics.push()
@@ -32,11 +32,6 @@ function love.draw()
 
       if test.error then
         color = FAILED
-      elseif test.thread:getError() then
-        color = FAILED
-        test.error = test.thread:getError()
-        print("ERROR in " .. test.name .. ":")
-        print(test.error)
       else
         color = SUCCESS
       end
@@ -49,7 +44,7 @@ function love.draw()
 
   local hovered = tests[math.ceil(love.mouse.getX() / 20)]
   if hovered then
-    love.graphics.setColor(255, 255, 255)
+    love.graphics.setColor(1, 1, 1)
     love.graphics.print(hovered.name, 10, 30)
     if hovered.error then
       love.graphics.printf(hovered.error, 10, 50, love.graphics.getWidth() - 20)
@@ -62,6 +57,22 @@ end
 
 function love.keypressed(key)
   if key == "escape" then love.event.push "quit" end
+end
+
+function love.threaderror(thread, str)
+  for i, test in ipairs(tests) do
+    if test.thread == thread then
+      len = test.name:len()
+      print("┏╸ ERROR in " .. test.name .. ":")
+      print("┠────────────" .. string.rep("─", len))
+      print(str)
+      print("┗━━━━━━━━━━━━" .. string.rep("━", len))
+      test.error = str
+      return
+    end
+  end
+
+  error("couldn't match thread to a test: " .. tostring(thread))
 end
 
 function love.mousepressed(x, y)
