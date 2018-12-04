@@ -311,6 +311,36 @@ local function readLayerMaskInfo(reader)
   return layers
 end
 
+local function readComposed(reader, width, height, channelCount)
+  local composed = reader:push(nil, "composed")
+  composed:log("starting composed")
+  local imageData = love.image.newImageData(width, height)
+  local data = ffi.cast("uint8_t *", imageData:getPointer())
+
+  local compression = composed:inkUint(2)
+  for i=0, channelCount-1 do
+    local chan = composed:push(nil, "C" .. i)
+    if compression == 0 then
+      readChannelRaw(chan, width * height, data, i, 4)
+    elseif compression == 1 then
+      readChannelRLE(chan, width, height, data, i, 4)
+    else
+      chan:error("unknown compression: " .. compression)
+    end
+    chan:pop()
+  end
+
+  -- fill in alpha
+  if channelCount < 4 then
+    for i=0, width*height - 1 do
+      data[i * 4 + 3] = 255
+    end
+  end
+
+  composed:pop()
+  return love.graphics.newImage(imageData)
+end
+
 return {
   newPSD = function(file, structure)
     if type(file) == "string" then
@@ -335,22 +365,7 @@ return {
       result[i] = layer
     end
 
-    local compression = reader:inkUint(2)
-    local imageData = love.image.newImageData(width, height)
-    local data = ffi.cast("uint8_t *", imageData:getPointer())
-    for i=0, channelCount-1 do
-      if compression == 0 then
-        readChannelRaw(reader, width * height, data, i, 4)
-      elseif compression == 1 then
-        readChannelRLE(reader, width, height, data, i, 4)
-      else
-        reader:error("unknown compression: " .. compression)
-      end
-    end
-    for i=0, width*height - 1 do
-      data[i * 4 + 3] = 255
-    end
-    result.composed = love.graphics.newImage(imageData)
+    result.composed = readComposed(reader, width, height, channelCount)
 
     return result
   end,

@@ -92,7 +92,10 @@ function BinaryReader.new(filePointer, start, parent, length, name)
   self.name = name
 
   if self.stop and self.parent and self.parent.stop then
-    assert(self.stop <= self.parent.stop, "can't push() length longer than parent has left")
+    assert(self.stop <= self.parent.stop, "can't push() length longer than parent has left: "
+      .. tostring(self.parent) .. " and "
+      .. tostring(self)
+    )
   end
 
   if DEBUG and self.name then
