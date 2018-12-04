@@ -1,5 +1,5 @@
+path = ...
 require "setup"
-path = select(1, ...)
 
 assert(
   compareData(

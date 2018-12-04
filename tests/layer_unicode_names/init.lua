@@ -1,5 +1,5 @@
+path = ...
 require "setup"
-path = select(1, ...)
 
 local info = artal.newPSD(path .. "test.psd")
 

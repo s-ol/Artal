@@ -1,7 +1,9 @@
-package.path = "../?.lua;" .. package.path
+package.path = "../../?/init.lua;../../?.lua;" .. package.path
 
 require "love.image"
 require "love.filesystem"
+require "love.thread"
+require "artal.debug"
 artal = require "artal"
 
 local ffi = require "ffi"

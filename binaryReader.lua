@@ -24,14 +24,6 @@ SOFTWARE.
 
 local utf8 = require("utf8")
 
-local _assert, _error = assert, error
-local function assert(test, message)
-  _assert(test, debug.traceback("Artal: " .. message, 2))
-end
-local function error(message)
-  _error(debug.traceback("Artal: " .. message, 2))
-end
-
 local function bytes2word(first, second, third, fourth)
   local result = first
 
@@ -50,20 +42,73 @@ local function bytes2word(first, second, third, fourth)
 end
 
 local BinaryReader = {}
-function BinaryReader.new(filePointer, start, parent, length)
-  local self = setmetatable({}, { __index = BinaryReader })
+
+function BinaryReader:flush()
+  if self.debug then self.debug.done() end
+  if self.parent then self.parent:flush() end
+end
+
+function BinaryReader:assert(test, message)
+  if not test then
+    self:error(message, 3)
+  end
+  return test
+end
+
+function BinaryReader:error(message, level)
+  self:flush()
+  error(debug.traceback(tostring(self) .. ": " .. message, level or 2))
+end
+
+function BinaryReader:log(...)
+  if self.debug then
+    self.debug.log(...)
+  end
+end
+
+function BinaryReader:getName()
+  local name = self.name or "?"
+  if self.parent then
+    name = self.parent:getName() .. "/" .. name
+  end
+
+  return name
+end
+
+local meta = {
+  __index = BinaryReader,
+  __tostring = function(self)
+    return "BinaryReader<" .. self:getName() .. ">@" .. tostring(self.count) .. "/" .. tostring(self.stop)
+  end
+}
+
+function BinaryReader.new(filePointer, start, parent, length, name)
+  local self = setmetatable({}, meta)
 
   self.filePointer = filePointer
   self.count = start or 0
   self.stop = length and self.count + length
   self.parent = parent
+  self.name = name
+
+  if self.stop and self.parent and self.parent.stop then
+    assert(self.stop <= self.parent.stop, "can't push() length longer than parent has left")
+  end
+
+  if DEBUG and self.name then
+    local log, done = box(tostring(self))
+    self.debug = {
+      log = log,
+      done = done,
+    }
+  end
 
   return self
 end
 
 -- push a sub-reader that can optionally be limited by length
 function BinaryReader:push(...)
-  if self.child then error("can't double-push") end
+  if self.child then self:error("can't push() while a child is already active") end
   self.child = BinaryReader.new(self.filePointer, self.count, self, ...)
 
   return self.child
@@ -73,8 +118,17 @@ end
 -- if sub-reader is limited, skips parent past the limit
 -- otherwise, skips to sub-readers parent last position
 function BinaryReader:pop()
-  if not self.parent then error("not a child reader") end
+  if not self.parent then self:error("cannot pop() root reader") end
 
+  if self.stop and self.stop < self.count then
+    self:error("stepped past self.stop")
+  end
+
+  if self.stop and self.stop ~= self.count then
+    print("WARN: " .. tostring(self) .. " pop()ed before reaching self.stop")
+  end
+
+  if self.debug then self.debug.done() end
   self.parent.count = self.stop or self.count
 
   self.parent.child = nil
@@ -84,6 +138,10 @@ function BinaryReader:skip(length)
   self.count = self.count + length
 end
 
+function BinaryReader:stub()
+  self.count = self.stop
+end
+
 function BinaryReader:padTo(width)
   self:skip(-(self.count % -width))
 end
@@ -91,9 +149,9 @@ end
 function BinaryReader:inkUint(length)
   length = length or 1
 
-  assert(length == 1 or length == 2 or length == 4, "ink length must be a power of 2, no higher than 4")
-  assert(not self.child, "attempting to read while child reader active")
-  if self.stop then assert(self.stop >= self.count + length, "attempting to read out of bounds") end
+  self:assert(length == 1 or length == 2 or length == 4, "ink length must be a power of 2, no higher than 4")
+  self:assert(not self.child, "attempting to read while child reader active")
+  if self.stop then self:assert(self.stop >= self.count + length, "attempting to read out of bounds") end
 
   local first = self.filePointer[self.count]
   local second
