@@ -27,24 +27,20 @@ local path = (...):gsub("%.init$", "")
 local ffi = require("ffi")
 local BinaryReader = require(path .. ".binaryReader")
 
+-- read one `pixels` pixels from `reader` into
+-- data[offset + i * stride]
 local function readChannelRaw(reader, pixels, data, offset, stride)
-  -- Photoshop:      LÖVE/GL:
-  --  RRRR...         RGBA
-  --  GGGG...         RGBA
-  --  BBBB...         RGBA
-  --  AAAA...         RGBA
-  --                  ...
-  --  byte [4][H][W];
-  --                  byte data[H][W][4];
   for i = 0, pixels - 1 do
     data[offset + i * stride] = reader.filePointer[reader.count]
     reader:skip(1)
   end
 end
 
+-- uncompress all the RLE-compressed data in `reader` into
+-- data[offset + i * stride] and return the uncompressed length
 local function readRLE(reader, data, offset, stride)
   local i = 0
-  while reader.count < reader.stop do
+  while reader:hasData() do
     local head = reader:inkInt(1)
     if head >= 0 then
       for _=1, 1 + head do
@@ -64,6 +60,9 @@ local function readRLE(reader, data, offset, stride)
   return i
 end
 
+-- read one 'Channel Image Data' into data[offset + i * stride]
+-- according to its compression mode.
+-- `channel` needs keys .width, .height, .length
 local function readChannel(reader, channel, data, offset, stride, name)
   reader = reader:push(channel.length, name or "channel")
 
@@ -100,6 +99,10 @@ local offsetTable = {
   [2] = 2, -- blue
   [-1] = 3, -- alpha
 }
+
+-- read all 'Channel Image Data' for `layer` and compose
+-- into a love2d Image instance
+-- `layer` needs keys .width, .height, .channels (see readChannel)
 local function readImage(reader, layer, name)
   reader = reader:push(nil, name or "image")
 
@@ -125,6 +128,8 @@ local function readImage(reader, layer, name)
   return love.graphics.newImage(imageData)
 end
 
+-- read PSD file header
+-- returns width, height, channelCount
 local function readHeader(reader)
   local reader = reader:push(26, "header")
 
@@ -168,8 +173,12 @@ local function readImageResources(reader)
   reader:pop()
 end
 
+-- read a 'Layer Record' into a table with
+-- .top, .bottom, .left, .right, .width, .height,
+-- .channels, .blendMode, .opacity, .clipping, .flags,
+-- .type, .name
 local function readLayerRecord(layers, reader, id)
-  reader = reader:push(nil, "L" .. id)
+  reader = reader:push(nil, "layerRecord_" .. id)
 
   local layer = {}
   layer.top, layer.left = reader:inkUint(4), reader:inkUint(4)
@@ -221,14 +230,15 @@ local function readLayerRecord(layers, reader, id)
       extra:skip(4 - (nameLength % 4))
     end
 
-    while extra.count < extra.stop do
+    while extra:hasData() do
       assert(extra:inkString(4) == "8BIM", "extra info signature wrong")
       local key = extra:inkString(4)
       local info = extra:push(extra:inkUint(4), "info:" .. key)
       if key == "luni" then -- unicode layer name
-        layer.name = info:inkUnicodeString(info.stop - info.count)
-        extra:log("uni name = '%s'", layer.name)
+        layer.name = info:inkUnicodeString()
+        extra:log("unicode name = '%s'", layer.name)
         if layer.other then layer.other.name = layer.name end
+        info:stub()
       elseif key == "lsct" then -- section divider setting
         local type = info:inkUint(4)
         if type == 3 then
@@ -248,8 +258,8 @@ local function readLayerRecord(layers, reader, id)
           layer.type = "close"
         end
       else
-        -- TODO: optional fields
-        -- info:stub()
+        extra:log("unknown additional layer info: %s", key)
+        info:stub()
       end
       info:pop()
     end
@@ -260,6 +270,7 @@ local function readLayerRecord(layers, reader, id)
   return layer
 end
 
+-- read 'Layer Info' structure and return list of layers
 local function readLayers(reader)
   reader = reader:push(reader:inkUint(4), "layerInfo")
   local layerCount = reader:inkInt(2)
@@ -295,10 +306,8 @@ local function readLayerMaskInfo(reader)
 
   local layers = readLayers(reader)
 
-  if reader.count < reader.stop then
+  if reader:hasData() then
     readGlobalLayerMask(reader)
-  else
-    reader:log("no length allocated for globalLayerMask - skipping")
   end
 
   reader:stub()
@@ -307,6 +316,7 @@ local function readLayerMaskInfo(reader)
   return layers
 end
 
+-- read composed image into love2d Image instance
 local function readComposed(reader, width, height, channelCount)
   reader = reader:push(nil, "composed")
   local imageData = love.image.newImageData(width, height)
@@ -381,7 +391,9 @@ return {
       result[i] = layer
     end
 
-    result.composed = readComposed(reader, width, height, channelCount)
+    if reader:hasData() then
+      result.composed = readComposed(reader, width, height, channelCount)
+    end
 
     return result
   end,
