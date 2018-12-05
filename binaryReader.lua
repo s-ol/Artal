@@ -78,7 +78,7 @@ end
 local meta = {
   __index = BinaryReader,
   __tostring = function(self)
-    return "BinaryReader<" .. self:getName() .. ">@" .. tostring(self.count) .. "/" .. tostring(self.stop)
+    return ("BinaryReader<%s>@%x/%x"):format(self:getName(), self.count, self.stop or 0)
   end
 }
 
