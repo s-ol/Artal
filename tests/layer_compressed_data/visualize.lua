@@ -9,7 +9,7 @@ for i, layer in ipairs(image) do
 end
 
 return function ()
-  love.graphics.setColor(255, 255, 255)
+  love.graphics.setColor(1, 1, 1)
   for i, layer in ipairs(image) do
     if layer.image then
       love.graphics.draw(layer.image)

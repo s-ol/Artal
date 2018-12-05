@@ -28,8 +28,6 @@ local ffi = require("ffi")
 local BinaryReader = require(path .. ".binaryReader")
 
 local function readChannelRaw(reader, pixels, data, offset, stride)
-  reader:log("loading uncompressed")
-
   -- Photoshop:      LÖVE/GL:
   --  RRRR...         RGBA
   --  GGGG...         RGBA
@@ -44,40 +42,28 @@ local function readChannelRaw(reader, pixels, data, offset, stride)
   end
 end
 
-local function readChannelRLE(reader, width, height, data, offset, stride)
-  local lineSizes = {}
-  for l=1,height do
-    lineSizes[l] = reader:inkUint(2)
-  end
-
-  for l, length in ipairs(lineSizes) do
-    local line = reader:push(length, "L" .. l)
-
-    local pixel = (l - 1) * width
-
-    while line.count < line.stop do
-      local head = line:inkInt(1)
-      if head >= 0 then
-        for i=1, 1 + head do
-          local value = line:inkUint(1)
-          data[offset + i * stride] = value
-          pixel = pixel + 1
-        end
-      elseif head > -128 then
-        local value = line:inkUint(1)
-        for i=1, 1 - head do
-          data[offset + i * stride] = value
-          pixel = pixel + 1
-        end
+local function readRLE(reader, data, offset, stride)
+  local i = 0
+  while reader.count < reader.stop do
+    local head = reader:inkInt(1)
+    if head >= 0 then
+      for _=1, 1 + head do
+        local value = reader:inkUint(1)
+        data[offset + i * stride] = value
+        i = i + 1
+      end
+    elseif head > -128 then
+      local value = reader:inkUint(1)
+      for _=1, 1 - head do
+        data[offset + i * stride] = value
+        i = i + 1
       end
     end
-    line:pop()
   end
-  reader:log("read %d lines", #lineSizes)
+
+  return i
 end
 
--- channel: { width, height, length }
--- writes data[offset + i * stride] for i=1,width*height
 local function readChannel(reader, channel, data, offset, stride, name)
   reader = reader:push(channel.length, name or "channel")
 
@@ -89,9 +75,18 @@ local function readChannel(reader, channel, data, offset, stride, name)
     readChannelRaw(chan, pixels, data, offset, stride)
     chan:pop()
   elseif compression == 1 then
-    local chan = reader:push(nil, "RLE")
-    readChannelRLE(chan, channel.width, channel.height, data, offset, stride)
-    chan:pop()
+    local lineLengths = {}
+    for l=1,channel.height do
+      lineLengths[l] = reader:inkUint(2)
+    end
+
+    local lineOffset = 0
+    for l, length in ipairs(lineLengths) do
+      local line = reader:push(length, "L" .. l)
+      readRLE(line, data, lineOffset + offset, stride)
+      lineOffset = lineOffset + channel.width * 4
+      line:pop()
+    end
   else
     reader:error("unknown compression mode " .. compression)
   end
@@ -122,7 +117,6 @@ local function readImage(reader, layer, name)
     if not channelOffset then
       error("unsupported channelId: " .. channel.id)
     end
-    reader:log("channel %d: offset %d", i, channelOffset)
 
     readChannel(reader, channel, data, channelOffset, 4, "C" .. i)
   end
@@ -140,7 +134,7 @@ local function readHeader(reader)
   reader:skip(6) -- reserved space
 
   local channelCount = reader:inkUint(2)
-  local width, height = reader:inkUint(4), reader:inkUint(4)
+  local height, width = reader:inkUint(4), reader:inkUint(4)
   local depth = reader:inkUint(2)
   local colorMode = reader:inkUint(2)
 
@@ -182,9 +176,6 @@ local function readLayerRecord(layers, reader, id)
   layer.bottom, layer.right = reader:inkUint(4), reader:inkUint(4)
   layer.width = layer.right - layer.left
   layer.height = layer.bottom - layer.top
-
-  reader:log("top (%d) - bottom (%d) = %d", layer.top, layer.bottom, layer.height)
-  reader:log("left (%d) - right (%d) = %d", layer.left, layer.right, layer.width)
 
   local channelCount = reader:inkUint(2)
   assert(channelCount == 3 or channelCount == 4, "only 3 or 4 channels supported per layer, channelCount was " .. channelCount)
@@ -270,7 +261,7 @@ local function readLayerRecord(layers, reader, id)
 end
 
 local function readLayers(reader)
-  reader = reader:push(reader:inkUint(4), "layers")
+  reader = reader:push(reader:inkUint(4), "layerInfo")
   local layerCount = reader:inkInt(2)
   local globalAlpha = layerCount < 1
   layerCount = math.abs(layerCount)
@@ -303,7 +294,12 @@ local function readLayerMaskInfo(reader)
   reader = reader:push(reader:inkUint(4), "layerMaskInfo")
 
   local layers = readLayers(reader)
-  readGlobalLayerMask(reader)
+
+  if reader.count < reader.stop then
+    readGlobalLayerMask(reader)
+  else
+    reader:log("no length allocated for globalLayerMask - skipping")
+  end
 
   reader:stub()
 
@@ -312,22 +308,42 @@ local function readLayerMaskInfo(reader)
 end
 
 local function readComposed(reader, width, height, channelCount)
-  local composed = reader:push(nil, "composed")
-  composed:log("starting composed")
+  reader = reader:push(nil, "composed")
   local imageData = love.image.newImageData(width, height)
   local data = ffi.cast("uint8_t *", imageData:getPointer())
 
-  local compression = composed:inkUint(2)
-  for i=0, channelCount-1 do
-    local chan = composed:push(nil, "C" .. i)
-    if compression == 0 then
+  local compression = reader:inkUint(2)
+  reader:log("compression = %d", compression)
+  reader:log("width, height = %d, %d", width, height)
+  reader:log("channels = %d", channelCount)
+  if compression == 0 then
+    for i=0, channelCount-1 do
+      local chan = reader:push(nil, "C" .. i)
       readChannelRaw(chan, width * height, data, i, 4)
-    elseif compression == 1 then
-      readChannelRLE(chan, width, height, data, i, 4)
-    else
-      chan:error("unknown compression: " .. compression)
+      chan:pop()
     end
-    chan:pop()
+  elseif compression == 1 then
+    local lineLengths, totalLength = {}, 0
+    for l=1,height * channelCount do
+      local length = reader:inkUint(2)
+      lineLengths[l] = length
+      totalLength = totalLength + length
+    end
+
+    local i = 1
+    local rle = reader:push(totalLength, "RLEdata")
+    for c=0, channelCount - 1 do
+      local lineOffset = 0
+      for l=0, height - 1 do
+        local line = rle:push(lineLengths[i], "L" .. l)
+        assert(readRLE(line, data, lineOffset + c, 4) == width)
+        lineOffset = lineOffset + width * 4
+        line:pop()
+      end
+    end
+    rle:pop()
+  else
+    chan:error("unknown compression: " .. compression)
   end
 
   -- fill in alpha
@@ -337,7 +353,7 @@ local function readComposed(reader, width, height, channelCount)
     end
   end
 
-  composed:pop()
+  reader:pop()
   return love.graphics.newImage(imageData)
 end
 

@@ -88,7 +88,7 @@ function love.draw()
   end
 
   love.graphics.translate(0, 50)
-  if visualization then visualization() end
+  if type(visualization) == "function" then visualization() end
 end
 
 function love.keypressed(key)
@@ -111,7 +111,7 @@ function love.mousepressed(x, y)
   visualization = nil
   local selected = tests[math.ceil(x / 20)]
   if selected then
-    local okay, mod = pcall(require, selected.name .. ".visualize")
+    local okay, mod = assert(pcall(require, selected.name .. ".visualize"))
     if okay then visualization = mod end
   end
 end
